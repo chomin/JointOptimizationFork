@@ -1,14 +1,19 @@
+import sys
+
 import numpy as np
 from PIL import Image
-
 import torchvision
+from torch.utils.data.dataset import Subset
+
 
 def get_cifar10(root, args, train=True,
-                 transform_train=None, transform_val=None,
-                 download=False):
-
+                transform_train=None, transform_val=None,
+                download=False):
     base_dataset = torchvision.datasets.CIFAR10(root, train=train, download=download)
-    train_idxs, val_idxs = train_val_split(base_dataset.train_labels)
+    train_idxs, val_idxs = train_val_split(base_dataset.targets)
+    # num_samples = len(base_dataset)
+    # train_size = int(num_samples * 0.9)
+    # train_idxs, val_idxs = list(range(0, train_size)), list(range(train_size, num_samples))
 
     train_dataset = CIFAR10_train(root, train_idxs, args, train=train, transform=transform_train)
     if args.asym:
@@ -17,18 +22,18 @@ def get_cifar10(root, args, train=True,
         train_dataset.symmetric_noise()
     val_dataset = CIFAR10_val(root, val_idxs, train=train, transform=transform_val)
 
-    print (f"Train: {len(train_idxs)} Val: {len(val_idxs)}")
+    print(f"Train: {len(train_idxs)} Val: {len(val_idxs)}")
     return train_dataset, val_dataset
-    
 
-def train_val_split(train_val):
-    train_val = np.array(train_val)
-    train_n = int(len(train_val) * 0.9 / 10)
+
+def train_val_split(base_dataset: torchvision.datasets.CIFAR10):
+    base_dataset = np.array(base_dataset)
+    train_n = int(len(base_dataset) * 0.9 / 10)
     train_idxs = []
     val_idxs = []
 
     for i in range(10):
-        idxs = np.where(train_val == i)[0]
+        idxs = np.where(base_dataset == i)[0]
         np.random.shuffle(idxs)
         train_idxs.extend(idxs[:train_n])
         val_idxs.extend(idxs[train_n:])
@@ -37,21 +42,22 @@ def train_val_split(train_val):
 
     return train_idxs, val_idxs
 
+
 class CIFAR10_train(torchvision.datasets.CIFAR10):
 
     def __init__(self, root, indexs=None, args=None, train=True,
                  transform=None, target_transform=None,
                  download=False):
         super(CIFAR10_train, self).__init__(root, train=train,
-                 transform=transform, target_transform=target_transform,
-                 download=download)
+                                            transform=transform, target_transform=target_transform,
+                                            download=download)
         self.args = args
         if indexs is not None:
-            self.train_data = self.train_data[indexs]
-            self.train_labels = np.array(self.train_labels)[indexs]
+            self.train_data = self.data[indexs]
+            self.train_labels = np.array(self.targets)[indexs]
         self.soft_labels = np.zeros((len(self.train_data), 10), dtype=np.float32)
         self.prediction = np.zeros((len(self.train_data), 10, 10), dtype=np.float32)
-        
+
         self.count = 0
 
     def symmetric_noise(self):
@@ -99,7 +105,7 @@ class CIFAR10_train(torchvision.datasets.CIFAR10):
             np.save(f'{self.args.out}/images.npy', self.train_data)
             np.save(f'{self.args.out}/labels.npy', self.train_labels)
             np.save(f'{self.args.out}/soft_labels.npy', self.soft_labels)
-    
+
     def reload_label(self):
         self.train_data = np.load(f'{self.args.label}/images.npy')
         self.train_labels = np.load(f'{self.args.label}/labels.npy')
@@ -134,8 +140,8 @@ class CIFAR10_val(torchvision.datasets.CIFAR10):
                  transform=None, target_transform=None,
                  download=False):
         super(CIFAR10_val, self).__init__(root, train=train,
-                 transform=transform, target_transform=target_transform,
-                 download=download)
+                                          transform=transform, target_transform=target_transform,
+                                          download=download)
 
-        self.train_data = self.train_data[indexs]
-        self.train_labels = np.array(self.train_labels)[indexs]
+        self.train_data = self.data[indexs]
+        self.train_labels = np.array(self.targets)[indexs]
