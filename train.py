@@ -40,12 +40,12 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 # Miscs
 parser.add_argument('--manualSeed', type=int, default=0, help='manual seed')
-#Device options
+# Device options
 parser.add_argument('--gpu', default='0', type=str,
                     help='id(s) for CUDA_VISIBLE_DEVICES')
-#Method options
+# Method options
 parser.add_argument('--percent', type=float, default=0,
-                        help='Percentage of noise')
+                    help='Percentage of noise')
 parser.add_argument('--begin', type=int, default=70,
                     help='When to begin updating labels')
 parser.add_argument('--alpha', type=float, default=1.0,
@@ -55,14 +55,14 @@ parser.add_argument('--beta', type=float, default=0.5,
 parser.add_argument('--asym', action='store_true',
                     help='Asymmetric noise')
 parser.add_argument('--out', default='result',
-                        help='Directory to output the result')
+                    help='Directory to output the result')
 
 args = parser.parse_args()
 state = {k: v for k, v in args._get_kwargs()}
 
 # Use CUDA
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-use_cuda = torch.cuda.is_available()
+USE_CUDA = torch.cuda.is_available()
 
 # Random seed
 if args.manualSeed is None:
@@ -70,6 +70,7 @@ if args.manualSeed is None:
 np.random.seed(args.manualSeed)
 
 best_acc = 0  # best test accuracy
+
 
 def main():
     global best_acc
@@ -92,17 +93,19 @@ def main():
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
 
-    trainset, valset = dataset.get_cifar10('./data', args, train=True, download=True, transform_train=transform_train, transform_val=transform_val)
+    trainset, valset = dataset.get_cifar10('./data', args, train=True, download=True, transform_train=transform_train,
+                                           transform_val=transform_val)
     trainloader = data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=4)
     valloader = data.DataLoader(valset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     # Model
     print("==> creating preact_resnet")
     model = models.PreActResNet34()
+    if USE_CUDA:
+        model = torch.nn.DataParallel(model).cuda()
 
-    model = torch.nn.DataParallel(model).cuda()
     cudnn.benchmark = True
-    print('    Total params: %.2fM' % (sum(p.numel() for p in model.parameters())/1000000.0))
+    print('    Total params: %.2fM' % (sum(p.numel() for p in model.parameters()) / 1000000.0))
 
     val_criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -126,11 +129,10 @@ def main():
 
     # Train and val
     for epoch in range(start_epoch, args.epochs):
-
         print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
 
-        train_loss, train_acc = train(trainloader, model, optimizer, epoch, use_cuda)
-        val_loss, val_acc = validate(valloader, model, val_criterion, epoch, use_cuda)
+        train_loss, train_acc = train(trainloader, model, optimizer, epoch, USE_CUDA)
+        val_loss, val_acc = validate(valloader, model, val_criterion, epoch, USE_CUDA)
 
         # append logger file
         logger.append([state['lr'], train_loss, val_loss, train_acc, val_acc])
@@ -139,12 +141,12 @@ def main():
         is_best = val_acc > best_acc
         best_acc = max(val_acc, best_acc)
         save_checkpoint({
-                'epoch': epoch + 1,
-                'state_dict': model.state_dict(),
-                'acc': val_acc,
-                'best_acc': best_acc,
-                'optimizer' : optimizer.state_dict(),
-            }, is_best)
+            'epoch': epoch + 1,
+            'state_dict': model.state_dict(),
+            'acc': val_acc,
+            'best_acc': best_acc,
+            'optimizer': optimizer.state_dict(),
+        }, is_best)
 
     logger.close()
     logger.plot()
@@ -152,6 +154,7 @@ def main():
 
     print('Best acc:')
     print(best_acc)
+
 
 def train(trainloader, model, optimizer, epoch, use_cuda):
     # switch to train mode
@@ -177,7 +180,7 @@ def train(trainloader, model, optimizer, epoch, use_cuda):
 
         # compute output
         outputs = model(inputs)
-        
+
         probs, loss = mycriterion(outputs, soft_targets)
 
         results[indexs.cpu().detach().numpy().tolist()] = probs.cpu().detach().numpy().tolist()
@@ -198,23 +201,24 @@ def train(trainloader, model, optimizer, epoch, use_cuda):
         end = time.time()
 
         # plot progress
-        bar.suffix  = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
-                    batch=batch_idx + 1,
-                    size=len(trainloader),
-                    data=data_time.avg,
-                    bt=batch_time.avg,
-                    total=bar.elapsed_td,
-                    eta=bar.eta_td,
-                    loss=losses.avg,
-                    top1=top1.avg,
-                    top5=top5.avg,
-                    )
+        bar.suffix = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
+            batch=batch_idx + 1,
+            size=len(trainloader),
+            data=data_time.avg,
+            bt=batch_time.avg,
+            total=bar.elapsed_td,
+            eta=bar.eta_td,
+            loss=losses.avg,
+            top1=top1.avg,
+            top5=top5.avg,
+        )
         bar.next()
     bar.finish()
 
     # update soft labels
     trainloader.dataset.label_update(results)
     return (losses.avg, top1.avg)
+
 
 def validate(valloader, model, criterion, epoch, use_cuda):
     global best_acc
@@ -237,7 +241,7 @@ def validate(valloader, model, criterion, epoch, use_cuda):
 
             if use_cuda:
                 inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
-            
+
             # compute output
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -253,20 +257,21 @@ def validate(valloader, model, criterion, epoch, use_cuda):
             end = time.time()
 
             # plot progress
-            bar.suffix  = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
-                        batch=batch_idx + 1,
-                        size=len(valloader),
-                        data=data_time.avg,
-                        bt=batch_time.avg,
-                        total=bar.elapsed_td,
-                        eta=bar.eta_td,
-                        loss=losses.avg,
-                        top1=top1.avg,
-                        top5=top5.avg,
-                        )
+            bar.suffix = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
+                batch=batch_idx + 1,
+                size=len(valloader),
+                data=data_time.avg,
+                bt=batch_time.avg,
+                total=bar.elapsed_td,
+                eta=bar.eta_td,
+                loss=losses.avg,
+                top1=top1.avg,
+                top5=top5.avg,
+            )
             bar.next()
         bar.finish()
     return (losses.avg, top1.avg)
+
 
 def save_checkpoint(state, is_best, checkpoint=args.out, filename='checkpoint.pth.tar'):
     filepath = os.path.join(checkpoint, filename)
@@ -274,9 +279,12 @@ def save_checkpoint(state, is_best, checkpoint=args.out, filename='checkpoint.pt
     if is_best:
         shutil.copyfile(filepath, os.path.join(checkpoint, 'model_best.pth.tar'))
 
+
 def mycriterion(outputs, soft_targets):
     # We introduce a prior probability distribution p, which is a distribution of classes among all training data.
-    p = torch.ones(10).cuda() / 10
+
+    p = torch.ones(10).cuda() / 10 if USE_CUDA else torch.ones(10) / 10
+
 
     probs = F.softmax(outputs, dim=1)
     avg_probs = torch.mean(probs, dim=0)

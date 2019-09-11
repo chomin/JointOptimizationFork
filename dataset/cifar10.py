@@ -22,7 +22,7 @@ def get_cifar10(root, args, train=True,
         train_dataset.symmetric_noise()
     val_dataset = CIFAR10_val(root, val_idxs, train=train, transform=transform_val)
 
-    print(f"Train: {len(train_idxs)} Val: {len(val_idxs)}")
+    print(f"Train: {len(train_idxs)} Val: {len(val_idxs)}")  # Train: 45000 Val: 5000
     return train_dataset, val_dataset
 
 
@@ -53,8 +53,13 @@ class CIFAR10_train(torchvision.datasets.CIFAR10):
                                             download=download)
         self.args = args
         if indexs is not None:
-            self.train_data = self.data[indexs]
-            self.train_labels = np.array(self.targets)[indexs]
+            # print(max(indexs))  # 49999
+            # print(len(indexs))  # 45000
+            # sys.exit(0)
+            # self.train_data = self.data[indexs]
+            # self.train_labels = np.array(self.targets)[indexs]
+            self.train_data = self.data
+            self.train_labels = np.array(self.targets)
         self.soft_labels = np.zeros((len(self.train_data), 10), dtype=np.float32)
         self.prediction = np.zeros((len(self.train_data), 10, 10), dtype=np.float32)
 
@@ -93,7 +98,8 @@ class CIFAR10_train(torchvision.datasets.CIFAR10):
     def label_update(self, results):
         self.count += 1
 
-        # While updating the noisy label y_i by the probability s, we used the average output probability of the network of the past 10 epochs as s.
+        # While updating the noisy label y_i by the probability s,
+        # we used the average output probability of the network of the past 10 epochs as s.
         idx = (self.count - 1) % 10
         self.prediction[:, idx] = results
 
@@ -143,5 +149,7 @@ class CIFAR10_val(torchvision.datasets.CIFAR10):
                                           transform=transform, target_transform=target_transform,
                                           download=download)
 
-        self.train_data = self.data[indexs]
-        self.train_labels = np.array(self.targets)[indexs]
+        # self.train_data = self.data[indexs]
+        # self.train_labels = np.array(self.targets)[indexs]
+        self.train_data = self.data
+        self.train_labels = np.array(self.targets)
