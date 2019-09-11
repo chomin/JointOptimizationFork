@@ -52,14 +52,14 @@ class CIFAR10_train(torchvision.datasets.CIFAR10):
                                             transform=transform, target_transform=target_transform,
                                             download=download)
         self.args = args
-        if indexs is not None:
+        # if indexs is not None:
             # print(max(indexs))  # 49999
             # print(len(indexs))  # 45000
             # sys.exit(0)
             # self.train_data = self.data[indexs]
             # self.train_labels = np.array(self.targets)[indexs]
-            self.train_data = self.data
-            self.train_labels = np.array(self.targets)
+        self.train_data = self.data
+        self.train_labels = np.array(self.targets)
         self.soft_labels = np.zeros((len(self.train_data), 10), dtype=np.float32)
         self.prediction = np.zeros((len(self.train_data), 10, 10), dtype=np.float32)
 

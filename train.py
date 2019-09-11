@@ -201,7 +201,8 @@ def train(trainloader, model, optimizer, epoch, use_cuda):
         end = time.time()
 
         # plot progress
-        bar.suffix = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
+        bar.suffix = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | ' \
+                     'Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
             batch=batch_idx + 1,
             size=len(trainloader),
             data=data_time.avg,
@@ -215,9 +216,9 @@ def train(trainloader, model, optimizer, epoch, use_cuda):
         bar.next()
     bar.finish()
 
-    # update soft labels
+    # update soft labels （論文には、CIFAR10の場合、ラベルの更新は70epoch目からとあるが...?）
     trainloader.dataset.label_update(results)
-    return (losses.avg, top1.avg)
+    return losses.avg, top1.avg
 
 
 def validate(valloader, model, criterion, epoch, use_cuda):
@@ -284,7 +285,6 @@ def mycriterion(outputs, soft_targets):
     # We introduce a prior probability distribution p, which is a distribution of classes among all training data.
 
     p = torch.ones(10).cuda() / 10 if USE_CUDA else torch.ones(10) / 10
-
 
     probs = F.softmax(outputs, dim=1)
     avg_probs = torch.mean(probs, dim=0)
